@@ -1,0 +1,3 @@
+_type: "prompt"
+template: "{country}의 수도가 어디인가요?"
+input_variables: ["country"]
