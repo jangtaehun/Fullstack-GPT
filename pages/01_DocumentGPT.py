@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain.prompts import ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.document_loaders import UnstructuredFileLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings, CacheBackedEmbeddings
@@ -7,13 +7,38 @@ from langchain.storage import LocalFileStore
 from langchain.vectorstores import FAISS
 from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
 from langchain.chat_models import ChatOpenAI
+from langchain.callbacks.base import BaseCallbackHandler
+from langchain.memory import ConversationSummaryBufferMemory
+
 
 st.set_page_config(
     page_title="DocumentGPT",
     page_icon="📑",
 )
 
-llm = ChatOpenAI(temperature=0.1)
+
+class ChatCallbackHandler(BaseCallbackHandler):
+    message = ""
+
+    def on_llm_start(self, *arg, **kwargs):
+        self.message_box = st.empty()
+        # llm이 생성하는 걸 시작하면 empty box를 만든다. -> screen에
+        # 그리고 empty box를 self.message_box 안에 저장한다.
+
+    def on_llm_end(self, *arg, **kwargs):
+        save_message(self.message, "ai")
+
+    def on_llm_new_token(self, token: str, *args, **kwargs):
+        self.message += token
+        # 글자 즉, token을 받으면 안이 빈 걸로 시작하는 message에 추가,
+        self.message_box.markdown(self.message)
+        # 그 글자를 현 메세지의 끝부분에 추가하고 message_box를 업데이트
+
+
+# langchain의 context 안에 있는 callback handler는 기본적으로 llm의 event를 listen하는 class
+# llm이 무언가를 만들기 시작할 때, 작업을 끝낼 때, 글자를 생성하거나 streaming할 때, 에러가 발생할 때 event를 listen하는 class
+
+llm = ChatOpenAI(temperature=0.1, streaming=True, callbacks=[ChatCallbackHandler()])
 
 # 이 코드를 사용하면 파일을 삭제하고 다시 첨부해도 기록이 남는다.
 # streamlit의 session state는 여러 번 재실행을 해도 data가 보존될 수 있게 해준다.
@@ -21,6 +46,15 @@ llm = ChatOpenAI(temperature=0.1)
 #     st.session_state["messages"] = []
 # 만약 st.session_state가 messages라는 key를 가지고 있지 않다면 빈 list로 initialize 한다.
 # 가지고 있다면 그 messages를 유지하고 싶기 때문에 아무것도 하지 않는다.
+
+memory = ConversationSummaryBufferMemory(
+    llm=llm, max_token_limit=150, memory_key="history"
+)
+
+
+def load_memory(input):
+    return memory.load_memory_variables({})["history"]
+    # memory.save_context({"input": message}, {"output": chain.invoke(message).content})
 
 
 @st.cache_data(show_spinner="Embedding file...")
@@ -42,7 +76,7 @@ def embed_file(file):
         chunk_overlap=100,
     )
     loader = UnstructuredFileLoader("./files/chapter_one.txt")
-    print(loader)
+    # print(loader)
     docs = loader.load_and_split(text_splitter=splitter)
     embeddings = OpenAIEmbeddings()
     cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
@@ -51,12 +85,16 @@ def embed_file(file):
     return retriever
 
 
+def save_message(message, role):
+    st.session_state["messages"].append({"message": message, "role": role})
+
+
 # message, role 저장
 def send_message(message, role, save=True):
     with st.chat_message(role):
         st.markdown(message)
     if save:
-        st.session_state["messages"].append({"message": message, "role": role})
+        save_message(message, role)
 
 
 # message 기록 보이기, 저장X
@@ -113,12 +151,17 @@ if file:
             {
                 "context": retriever | RunnableLambda(format_docs),
                 "question": RunnablePassthrough(),
+                "history": load_memory,
             }
             | template
             | llm
         )
-        response = chain.invoke(message)
-        send_message(response.content, "ai")
+
+        with st.chat_message("ai"):
+            response = chain.invoke(message).content
+            # memory.save_context({"input": message}, {"output": response.content})
+
+        # send_message(response.content, "ai")
         # docs = retriever.invoke(message) -> retriever
 
         # 사용자가 보내는 message는 RunnablePassthrough()로, langchain은 사용자의 message를 가지고 retriever을 호출
