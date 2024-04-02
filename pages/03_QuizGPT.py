@@ -1,4 +1,8 @@
 import streamlit as st
+from langchain.retrievers import WikipediaRetriever
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import UnstructuredFileLoader
+
 
 # 파일에 대한 질문을 하는 대신에 LLM이 우리에게 파일의 내용과 관련된 질문을 하게끔 명령할 것이다.
 # Wikipedia Retriever를 사용
@@ -11,17 +15,42 @@ import streamlit as st
 
 st.title("QuizGPT")
 
-with st.sidebar:
-    choice = st.selectbox(
-        "Choose what you want to use.",
-        (
-            "File",
-            "Wikipedia Article",
-        ),
+
+# 단지 tex file을 넣어준다. -> embed (X)
+@st.cache_data(show_spinner="Loading file...")
+def split_file(file):
+    file_content = file.read()
+    file_path = f"./.cache/quiz_files/{file.name}"
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    splitter = CharacterTextSplitter.from_tiktoken_encoder(
+        separator="\n",
+        chunk_size=600,
+        chunk_overlap=100,
     )
-    if choice == "File":
-        file = st.file_uploader(
-            "Upload a .docx, .txt or .pdf file", type=["docx", "txt", "pdf"]
-        )
-    else:
-        topic = st.text_input("Name of the article")
+    loader = UnstructuredFileLoader("./files/chapter_one.txt")
+    docs = loader.load_and_split(text_splitter=splitter)
+    return docs
+
+
+# with st.sidebar:
+choice = st.selectbox(
+    "Choose what you want to use.",
+    (
+        "File",
+        "Wikipedia Article",
+    ),
+)
+if choice == "File":
+    file = st.file_uploader(
+        "Upload a .docx, .txt or .pdf file", type=["docx", "txt", "pdf"]
+    )
+    if file:
+        docs = split_file(file)
+else:
+    topic = st.text_input("Search Wikipedia...")
+    if topic:
+        retriever = WikipediaRetriever()
+        # top_k_results=1 : 첫 번째 결과만 사용
+        with st.status("Searching Wikipedia..."):
+            docs = retriever.get_relevant_documents(topic)
