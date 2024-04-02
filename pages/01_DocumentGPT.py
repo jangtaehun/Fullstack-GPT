@@ -158,7 +158,7 @@ if file:
         )
 
         with st.chat_message("ai"):
-            response = chain.invoke(message).content
+            response = chain.invoke(message)
             # memory.save_context({"input": message}, {"output": response.content})
 
         # send_message(response.content, "ai")

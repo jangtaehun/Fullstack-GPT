@@ -8,3 +8,20 @@ import streamlit as st
 # 우리가 만든 함수가 어떻게 생겼는지, 어떤 parameter 값을 원하는지 LLM에게 설명할 수 있다.
 # 그런 뒤엔 우리가 LLM에게 질문을 했을 때, LLM이 text로 답하는 게 아니라 우리가 작성한 함수들을 호출한다.
 # agent에게 LLM을 설명 -> LLM은 함수를 호출 -> 호출에 필요한 인자값들을 함수에 넣어준다.
+
+st.title("QuizGPT")
+
+with st.sidebar:
+    choice = st.selectbox(
+        "Choose what you want to use.",
+        (
+            "File",
+            "Wikipedia Article",
+        ),
+    )
+    if choice == "File":
+        file = st.file_uploader(
+            "Upload a .docx, .txt or .pdf file", type=["docx", "txt", "pdf"]
+        )
+    else:
+        topic = st.text_input("Name of the article")
