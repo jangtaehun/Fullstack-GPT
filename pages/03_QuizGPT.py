@@ -18,6 +18,12 @@ from langchain.schema import BaseOutputParser
 # agent에게 LLM을 설명 -> LLM은 함수를 호출 -> 호출에 필요한 인자값들을 함수에 넣어준다.
 
 
+st.set_page_config(
+    page_title="QuizGPT",
+    page_icon="💷",
+)
+
+
 class JsonOutputParser(BaseOutputParser):
     def parse(self, text):
         text = text.replace("```", "").replace("json", "")
@@ -303,3 +309,6 @@ else:
             elif value is not None:
                 st.error("오답")
         button = st.form_submit_button()
+
+
+# 정답을 알려주는 코드
