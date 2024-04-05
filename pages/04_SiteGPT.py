@@ -43,13 +43,57 @@ def get_answers(inputs):
     docs = inputs["docs"]
     question = inputs["question"]
     answers_chain = answers_prompt | llm
-    answers = []
-    for doc in docs:
-        result = answers_chain.invoke(
-            {"question": question, "context": doc.page_content}
-        )
-        answers.append(result.content)
-    st.write(answers)
+    # answers = []
+    # for doc in docs:
+    #     result = answers_chain.invoke(
+    #         {"question": question, "context": doc.page_content}
+    #     )
+    #     answers.append(result.content)
+    # st.write(answers)
+    return {
+        "question": question,
+        "answers": [
+            {
+                "answer": answers_chain.invoke(
+                    {"question": question, "context": doc.page_content}
+                ).content,
+                "source": doc.metadata["source"],
+                "date": doc.metadata["lastmod"],
+            }
+            for doc in docs
+        ],
+    }
+
+
+choose_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+            Use ONLY the following pre-existing answers to answer the user's question.
+
+            Use the answers that have the highest score (more helpful) and favor the most recent ones.
+
+            Cite sources and return the sources of the answers as they are, do not change them.
+
+            Answers: {answers}
+            """,
+        ),
+        ("human", "{question}"),
+    ]
+)
+
+
+def choose_answer(input):
+    answers = input["answers"]
+    question = input["question"]
+    choose_chain = choose_prompt | llm
+    condence = "\n\n".join(
+        f"Answer: {answer['answer']}\nSource: {answer['source']}\nDate: {answer['date']}\n"
+        for answer in answers
+    )
+
+    return choose_chain.invoke({"question": question, "answers": condence})
 
 
 def parse_page(soup):
@@ -123,10 +167,28 @@ if url:
             st.error("Please write down a Sitemap url")
     else:
         retriever = load_website(url)
-        # chain 2개: 1. 모든 개별 document에 대한 답변 생성 및 채점, 2. 모든 답변을 가진 마지막 시점에 실행 -> 점수가 제일 높고, 가장 최신 정보를 담고 있는 답변 고르기
-        chain = {"docs": retriever, "question": RunnablePassthrough()} | RunnableLambda(
-            get_answers
-        )
-        chain.invoke("What is the pricing of GPT-4 Turbo with vision")
-        # 질문이 retriever로 전달 -> docs 반환 -> RunnablePassthrough는 question 값으로 교체된다.
-        # dictionary가 get_answers function의 입력값으로 전달되고, 그 function은 dictionary에서 documents와 question 값을 추출
+
+        query = st.text_input("Ask a question to the website.")
+        if query:
+            # chain 2개: 1. 모든 개별 document에 대한 답변 생성 및 채점, 2. 모든 답변을 가진 마지막 시점에 실행 -> 점수가 제일 높고, 가장 최신 정보를 담고 있는 답변 고르기
+            chain = (
+                {"docs": retriever, "question": RunnablePassthrough()}
+                | RunnableLambda(get_answers)
+                | RunnableLambda(choose_answer)
+            )
+            # get_answer이 무엇을 반환하든 choose_answer에 전달된다. / get_answer의 출력 -> choose_answer의 입력값
+
+            result = chain.invoke(query)
+            # 질문이 retriever로 전달 -> docs 반환 -> RunnablePassthrough는 question 값으로 교체된다.
+            # dictionary가 get_answers function의 입력값으로 전달되고, 그 function은 dictionary에서 documents와 question 값을 추출
+
+            st.write(result.content.replace("$", "\$"))
+
+
+# code challenge
+# streaming, 사용자 및 assistant message, chat history
+# text 실시간 생성,
+
+# 추가적으로!! 사용자 question을 cache -> 똑같은 질문을 받으면 LLM에게 반복적으로 질문하는 것보다 이미 한 번 얻은 답변을 반환
+# 처음 question을 받았을 때 응답을 보내면서 어딘가에 저장, 그 응답을 생성한 question도 어딘가에 보관
+# retrieve와 map re-rank를 작동시키기 전에 LLM에게 먼저 물어본다

@@ -249,7 +249,7 @@ def run_quiz_chain(_docs, topic):
 @st.cache_data(show_spinner="Searching Wikipedia...")
 def wiki_search(term):
     # hash: 들어오는 데이터의 서명을 생성한다는 것
-    retriever = WikipediaRetriever(top_k_results=5, lang="ko")
+    retriever = WikipediaRetriever(top_k_results=4, lang="ko")
     # top_k_results=1 : 첫 번째 결과만 사용
     docs = retriever.get_relevant_documents(term)
     return docs
