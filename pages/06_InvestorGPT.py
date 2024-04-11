@@ -8,8 +8,9 @@ from pydantic import BaseModel, Field
 from langchain.agents import initialize_agent, AgentType
 from langchain.utilities import DuckDuckGoSearchAPIWrapper
 from langchain.schema import SystemMessage
+from langchain.retrievers import WikipediaRetriever
 
-llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo-1106")
+llm = ChatOpenAI(temperature=0.1, model_name="gpt-4-turbo")
 alpha_vantage_api_key = os.environ.get("GI7UXI89QUWWJFK5")
 
 
@@ -86,6 +87,24 @@ class CompanyStockPerformanceTool(BaseTool):
         return list(response["Weekly Time Series"].items())[:200]
 
 
+class WikiArgsSchema(BaseModel):
+    term: str = Field(description="The search of the company.Example: Apple company")
+
+
+class WikiSearchTool(BaseTool):
+    name = "WikiSearchTool"
+    description = """
+    Use this tool to find the company's information.
+    Example term: Apple company
+    """
+    args_schema: Type[WikiArgsSchema] = WikiArgsSchema
+
+    def _run(self, term):
+        retriever = WikipediaRetriever(top_k_results=4, lang="ko")
+        docs = retriever.get_relevant_documents(term)
+        return docs
+
+
 agent = initialize_agent(
     llm=llm,
     verbose=True,
@@ -99,6 +118,7 @@ agent = initialize_agent(
         CompanyIncomeStatementTool(),
         # llm이 사용 안 할 수도 있다. llm이 더 많은 정보가 필요하다고 생각할 때만 사용
         CompanyStockPerformanceTool(),
+        WikiSearchTool(),
     ],
     agent_kwargs={
         "system_message": SystemMessage(
