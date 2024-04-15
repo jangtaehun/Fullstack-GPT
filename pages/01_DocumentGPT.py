@@ -57,7 +57,6 @@ def load_memory(input):
     # memory.save_context({"input": message}, {"output": chain.invoke(message).content})
 
 
-@st.cache_data(show_spinner="Embedding file...")
 def embed_file(file):
     file_content = file.read()
     # print(file_content) : 첨부한 file의 내용

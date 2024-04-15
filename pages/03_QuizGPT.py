@@ -243,6 +243,8 @@ def split_file(file):
 @st.cache_data(show_spinner="Making quiz...")
 def run_quiz_chain(_docs, topic):
     chain = {"context": questions_chain} | formatting_chain | output_parser
+    check = {"context": questions_chain} | formatting_chain
+    print(check)
     return chain.invoke(_docs)
 
 
